@@ -36,3 +36,49 @@ Accuracy alone is misleading here (about 87% of messages are ham), so precision,
 - **Frontend:** HTML, CSS, vanilla JavaScript
 
 ## Project Structure
+
+spamshield/
+├── backend/
+│ ├── app.py # FastAPI app (API + serves frontend)
+│ ├── preprocess.py # NLP preprocessing
+│ ├── train.py # Model training and evaluation
+│ ├── requirements.txt
+│ ├── data/ # SMS Spam Collection dataset
+│ └── model/ # Trained model, vectorizer, metrics
+└── frontend/
+├── index.html # Analyzer page
+├── metrics.html # Evaluation page
+├── style.css
+└── script.js
+
+
+## Run Locally
+
+```bash
+cd backend
+python -m venv venv
+venv\Scripts\activate        # Windows
+pip install -r requirements.txt
+python train.py              # trains the model
+uvicorn app:app --reload
+```
+
+Open http://127.0.0.1:8000
+
+## API
+
+| Method | Endpoint | Description |
+|---|---|---|
+| POST | `/predict` | Body: `{"text": "..."}`. Returns label, confidence, pipeline steps |
+| GET | `/metrics` | Model evaluation results |
+| GET | `/health` | Health check |
+
+## Limitations
+
+- Trained on English SMS only; Roman Urdu or other languages are not supported
+- Very short messages give low-confidence predictions
+- Spam without typical keywords may be missed
+
+## Dataset
+
+SMS Spam Collection (about 5,500 labelled messages).
