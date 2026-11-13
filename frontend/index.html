@@ -45,8 +45,8 @@
       </div>
       <div class="feat">
         <span class="feat-ico">🔍</span>
-        <h3>Shows its reasoning</h3>
-        <p>See every NLP step: tokenizing, stopword removal, stemming.</p>
+        <h3>Explains its reasoning</h3>
+        <p>See which words pushed the verdict, plus every NLP step.</p>
       </div>
       <div class="feat">
         <span class="feat-ico">📊</span>
@@ -76,6 +76,12 @@
     </section>
 
     <section id="result" class="result" aria-live="polite"></section>
+
+    <section class="topwords-section" id="topwords-section">
+      <h2>What the model learned</h2>
+      <p class="sub small">The strongest words behind each decision across the whole model. Words are shown in stemmed form (e.g. "mobile" becomes "mobil").</p>
+      <div id="topwords"></div>
+    </section>
 
     <section class="how" id="how">
       <h2>How it works</h2>
