@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SpamShield | AI Spam Classifier</title>
+  <meta name="description" content="NLP-powered spam vs ham message classifier">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="bg-glow"></div>
+
+  <header class="nav">
+    <div class="nav-inner">
+      <a class="brand" href="index.html">
+        <span class="brand-dot"></span>SpamShield
+      </a>
+      <nav class="nav-links">
+        <a class="active" href="index.html">Analyzer</a>
+        <a href="metrics.html">Evaluation</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container">
+
+    <section class="hero">
+      <span class="badge">NLP · TF-IDF · Logistic Regression</span>
+      <h1>Spam hides in plain sight. <span class="grad">SpamShield spots it.</span></h1>
+      <p class="sub">Fake prizes, phishing offers and scam texts look harmless at a glance. SpamShield reads a message the way a machine does, and tells you whether it is spam or safe, with proof.</p>
+      <div class="cta">
+        <a class="btn-primary" href="#analyzer">Try the analyzer</a>
+        <a class="btn-ghost" href="#how">How it works</a>
+      </div>
+    </section>
+
+    <section class="features">
+      <div class="feat">
+        <span class="feat-ico">🛡️</span>
+        <h3>Catches scams</h3>
+        <p>Trained on 5,500+ real SMS messages labelled spam or ham.</p>
+      </div>
+      <div class="feat">
+        <span class="feat-ico">🔍</span>
+        <h3>Shows its reasoning</h3>
+        <p>See every NLP step: tokenizing, stopword removal, stemming.</p>
+      </div>
+      <div class="feat">
+        <span class="feat-ico">📊</span>
+        <h3>Proven, not claimed</h3>
+        <p>About 97% accuracy on unseen messages, with full precision, recall and confusion matrix.</p>
+      </div>
+    </section>
+
+    <section class="panel" id="analyzer">
+      <div class="panel-head">
+        <label for="text">Your message</label>
+        <span id="count" class="muted">0 characters</span>
+      </div>
+      <textarea id="text" rows="5" placeholder="Paste a message here..."></textarea>
+
+      <div class="chips">
+        <span class="muted">Try an example:</span>
+        <button class="chip" data-text="WINNER!! You have won a free prize. Call 0900 now to claim your cash reward!">Prize scam</button>
+        <button class="chip" data-text="URGENT! Your account has been selected for a free gift. Reply YES to claim now">Fake offer</button>
+        <button class="chip" data-text="Hey, are we still meeting at the library after class tomorrow?">Normal chat</button>
+      </div>
+
+      <div class="actions">
+        <button id="check-btn" class="btn-primary">Analyze message</button>
+        <button id="clear-btn" class="btn-ghost">Clear</button>
+      </div>
+    </section>
+
+    <section id="result" class="result" aria-live="polite"></section>
+
+    <section class="how" id="how">
+      <h2>How it works</h2>
+      <div class="how-grid">
+        <div class="how-card"><span class="num">1</span><h3>Tokenize</h3><p>Text is lowercased and split into words.</p></div>
+        <div class="how-card"><span class="num">2</span><h3>Remove stopwords</h3><p>Common words like "the" and "is" are dropped.</p></div>
+        <div class="how-card"><span class="num">3</span><h3>Stem</h3><p>Words are reduced to roots: "claiming" becomes "claim".</p></div>
+        <div class="how-card"><span class="num">4</span><h3>TF-IDF + Classify</h3><p>Words become weighted numbers; the model predicts spam or ham.</p></div>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="footer">
+    Built for NLP coursework · FastAPI backend · scikit-learn
+  </footer>
+
+  <script src="script.js"></script>
+</body>
+</html>
