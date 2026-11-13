@@ -273,3 +273,19 @@ section[id] { scroll-margin-top: 80px; }
   background: var(--panel); border: 1px solid var(--border); border-radius: 16px; padding: 18px;
 }
 .tw-col h3 { margin: 0 0 8px; font-size: 15px; }
+/* Evaluation upgrade */
+.ctr { text-align: center; }
+.tag {
+  font-size: 11px; padding: 2px 8px; border-radius: 999px; margin-left: 6px;
+  background: rgba(99, 102, 241, 0.2); border: 1px solid rgba(99, 102, 241, 0.45); color: #a5b4fc;
+}
+.two-col { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; margin-top: 20px; }
+.card-block { background: var(--panel); border: 1px solid var(--border); border-radius: 16px; padding: 18px; }
+.roc-svg { width: 100%; height: auto; display: block; }
+.legend { display: flex; flex-wrap: wrap; gap: 8px 16px; justify-content: center; margin-top: 10px; font-size: 13px; color: var(--muted); }
+.lg i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; }
+#cm-select {
+  margin: 8px 0 16px; padding: 8px 12px; border-radius: 10px; font: inherit; font-size: 14px;
+  color: var(--text); background: rgba(0, 0, 0, 0.35); border: 1px solid var(--border);
+}
+.card-block .cm { max-width: 100%; }
