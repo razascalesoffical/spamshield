@@ -68,7 +68,11 @@
         <button class="chip" data-text="URGENT! Your account has been selected for a free gift. Reply YES to claim now">Fake offer</button>
         <button class="chip" data-text="Hey, are we still meeting at the library after class tomorrow?">Normal chat</button>
       </div>
-
+      <div class="thresh">
+        <label for="thr">Spam strictness: <b id="thr-val">50%</b></label>
+        <input type="range" id="thr" min="10" max="90" step="5" value="50">
+        <div class="thr-hint"><span>Lenient (catch more spam, more false alarms)</span><span>Strict (fewer false alarms, may miss spam)</span></div>
+      </div>
       <div class="actions">
         <button id="check-btn" class="btn-primary">Analyze message</button>
         <button id="clear-btn" class="btn-ghost">Clear</button>

@@ -230,6 +230,8 @@ td.best { color: #86efac; font-weight: 700; }
   .hero { padding: 36px 0 20px; }
   .nav-links a { margin-left: 14px; }
 }
+
+/* Intro */
 html { scroll-behavior: smooth; }
 section[id] { scroll-margin-top: 80px; }
 
@@ -248,6 +250,7 @@ section[id] { scroll-margin-top: 80px; }
 .feat-ico { font-size: 26px; }
 .feat h3 { margin: 10px 0 6px; font-size: 16px; }
 .feat p { margin: 0; color: var(--muted); font-size: 14px; }
+
 /* Explainability */
 .msg-box {
   padding: 14px; border-radius: 12px; background: rgba(0, 0, 0, 0.3);
@@ -273,6 +276,7 @@ section[id] { scroll-margin-top: 80px; }
   background: var(--panel); border: 1px solid var(--border); border-radius: 16px; padding: 18px;
 }
 .tw-col h3 { margin: 0 0 8px; font-size: 15px; }
+
 /* Evaluation upgrade */
 .ctr { text-align: center; }
 .tag {
@@ -289,3 +293,10 @@ section[id] { scroll-margin-top: 80px; }
   color: var(--text); background: rgba(0, 0, 0, 0.35); border: 1px solid var(--border);
 }
 .card-block .cm { max-width: 100%; }
+
+/* Threshold slider */
+.thresh { margin: 6px 0 18px; }
+.thresh label { font-size: 14px; color: var(--muted); }
+.thresh label b { color: var(--text); }
+.thresh input[type=range] { width: 100%; accent-color: var(--primary); margin: 8px 0 2px; }
+.thr-hint { display: flex; justify-content: space-between; gap: 12px; font-size: 12px; color: var(--muted); }

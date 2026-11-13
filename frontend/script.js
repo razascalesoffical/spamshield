@@ -21,7 +21,7 @@ async function predict() {
     const r = await fetch(`${API}/predict`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text })
+      body: JSON.stringify({ text, threshold: parseInt($("thr").value, 10) / 100 })
     });
     if (!r.ok) throw new Error("HTTP " + r.status);
     render(text, await r.json());
@@ -79,7 +79,7 @@ function render(text, d) {
         <div><h2>${isSpam ? "SPAM" : "HAM (safe)"}</h2><p>Confidence: ${d.confidence}%</p></div>
       </div>
       <div class="meter"><div class="meter-fill" id="meter"></div></div>
-      <div class="meter-label"><span>Spam probability</span><span>${d.spam_probability}%</span></div>
+      <div class="meter-label"><span>Spam probability (threshold ${Math.round(d.threshold * 100)}%)</span><span>${d.spam_probability}%</span></div>
     </div>
     <div class="step-card">
       <h4>Why this verdict? <span class="muted">(red = pushes toward spam, green = toward ham)</span></h4>
@@ -121,6 +121,8 @@ function initAnalyzer() {
   const ta = $("text");
   ta.addEventListener("input", () => { $("count").textContent = ta.value.length + " characters"; });
   $("check-btn").addEventListener("click", predict);
+  $("thr").addEventListener("input", () => { $("thr-val").textContent = $("thr").value + "%"; });
+  $("thr").addEventListener("change", () => { if ($("text").value.trim()) predict(); });
   $("clear-btn").addEventListener("click", () => {
     ta.value = ""; $("count").textContent = "0 characters"; $("result").innerHTML = ""; ta.focus();
   });
