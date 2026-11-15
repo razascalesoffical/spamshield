@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>SpamShield | AI Spam Classifier</title>
   <meta name="description" content="NLP-powered spam vs ham message classifier">
+  <script>try{document.documentElement.setAttribute("data-theme",localStorage.getItem("ss-theme")||"dark")}catch(e){}</script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -20,7 +21,9 @@
       </a>
       <nav class="nav-links">
         <a class="active" href="index.html">Analyzer</a>
+        <a href="#batch">Batch</a>
         <a href="metrics.html">Evaluation</a>
+        <button id="theme-btn" class="theme-btn" type="button">☀️ Light</button>
       </nav>
     </div>
   </header>
@@ -68,11 +71,13 @@
         <button class="chip" data-text="URGENT! Your account has been selected for a free gift. Reply YES to claim now">Fake offer</button>
         <button class="chip" data-text="Hey, are we still meeting at the library after class tomorrow?">Normal chat</button>
       </div>
+
       <div class="thresh">
         <label for="thr">Spam strictness: <b id="thr-val">50%</b></label>
         <input type="range" id="thr" min="10" max="90" step="5" value="50">
         <div class="thr-hint"><span>Lenient (catch more spam, more false alarms)</span><span>Strict (fewer false alarms, may miss spam)</span></div>
       </div>
+
       <div class="actions">
         <button id="check-btn" class="btn-primary">Analyze message</button>
         <button id="clear-btn" class="btn-ghost">Clear</button>
@@ -80,6 +85,29 @@
     </section>
 
     <section id="result" class="result" aria-live="polite"></section>
+
+    <section class="history" id="history-section" style="display:none">
+      <div class="hist-head">
+        <h3>Recent checks</h3>
+        <button id="hist-clear" class="btn-ghost btn-small" type="button">Clear history</button>
+      </div>
+      <div id="history-list"></div>
+    </section>
+
+    <section class="panel batch-panel" id="batch">
+      <div class="panel-head">
+        <label for="batch-text">Batch check</label>
+        <span id="batch-count" class="muted">0 messages</span>
+      </div>
+      <p class="muted">One message per line, or upload a CSV/TXT file (first column is used, maximum 200 messages). Uses the strictness slider above.</p>
+      <textarea id="batch-text" rows="6" placeholder="Free entry! Win a prize now&#10;Are we meeting after class?&#10;..."></textarea>
+      <div class="actions batch-actions">
+        <label class="btn-ghost file-btn">Upload CSV / TXT<input type="file" id="batch-file" accept=".csv,.txt,.tsv" hidden></label>
+        <button id="batch-btn" class="btn-primary" type="button">Check all</button>
+        <button id="batch-clear" class="btn-ghost" type="button">Clear</button>
+      </div>
+      <div id="batch-result"></div>
+    </section>
 
     <section class="topwords-section" id="topwords-section">
       <h2>What the model learned</h2>

@@ -6,8 +6,33 @@ function esc(s) {
     "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
   }[c]));
 }
+function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+async function errText(r) {
+  try { const j = await r.json(); if (typeof j.detail === "string") return j.detail; } catch (e) {}
+  return "HTTP " + r.status;
+}
 
-/* ---------------- Analyzer page ---------------- */
+/* ---------------- Theme toggle ---------------- */
+function applyTheme(t) {
+  document.documentElement.setAttribute("data-theme", t);
+  const b = $("theme-btn");
+  if (b) b.textContent = t === "light" ? "🌙 Dark" : "☀️ Light";
+}
+function initTheme() {
+  applyTheme(lsGet("ss-theme") || "dark");
+  const b = $("theme-btn");
+  if (b) b.addEventListener("click", () => {
+    const next = document.documentElement.getAttribute("data-theme") === "light" ? "dark" : "light";
+    lsSet("ss-theme", next);
+    applyTheme(next);
+  });
+}
+
+/* ---------------- Analyzer ---------------- */
+let last = null;
+const threshold = () => parseInt($("thr").value, 10) / 100;
+
 async function predict() {
   const text = $("text").value.trim();
   const out = $("result");
@@ -21,12 +46,17 @@ async function predict() {
     const r = await fetch(`${API}/predict`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text, threshold: parseInt($("thr").value, 10) / 100 })
+      body: JSON.stringify({ text, threshold: threshold() })
     });
-    if (!r.ok) throw new Error("HTTP " + r.status);
-    render(text, await r.json());
+    if (!r.ok) throw new Error(await errText(r));
+    const d = await r.json();
+    last = { text, d };
+    render(text, d);
+    addHistory(text, d);
   } catch (e) {
-    out.innerHTML = `<div class="notice error">Server reachable nahi hai ya request fail hui. Backend chal raha hai?</div>`;
+    const msg = e.message && e.message.indexOf("Rate limit") === 0
+      ? e.message : "Server reachable nahi hai ya request fail hui. Backend chal raha hai?";
+    out.innerHTML = `<div class="notice error">${esc(msg)}</div>`;
   } finally {
     btn.disabled = false;
     btn.textContent = "Analyze message";
@@ -81,6 +111,16 @@ function render(text, d) {
       <div class="meter"><div class="meter-fill" id="meter"></div></div>
       <div class="meter-label"><span>Spam probability (threshold ${Math.round(d.threshold * 100)}%)</span><span>${d.spam_probability}%</span></div>
     </div>
+
+    <div class="result-actions">
+      <button class="btn-ghost btn-small" id="copy-btn" type="button">📋 Copy result</button>
+      <span class="muted" id="copy-msg"></span>
+      <span class="spacer"></span>
+      <span class="muted">Wrong result?</span>
+      <button class="btn-ghost btn-small" id="fb-btn" type="button">Mark as ${isSpam ? "HAM" : "SPAM"}</button>
+      <span class="muted" id="fb-msg"></span>
+    </div>
+
     <div class="step-card">
       <h4>Why this verdict? <span class="muted">(red = pushes toward spam, green = toward ham)</span></h4>
       <div class="msg-box">${highlight(text, d)}</div>
@@ -91,11 +131,203 @@ function render(text, d) {
       <div class="step-card"><h4>2. Stopword removal (struck-through = removed)</h4><div class="tokens">${stopHtml || "-"}</div></div>
       <div class="step-card"><h4>3. Stemming</h4><div class="tokens">${stemHtml || "-"}</div></div>
     </div>`;
+
+  $("copy-btn").addEventListener("click", copyResult);
+  $("fb-btn").addEventListener("click", sendFeedback);
   requestAnimationFrame(() => {
-    setTimeout(() => { $("meter").style.width = d.spam_probability + "%"; }, 60);
+    setTimeout(() => { const m = $("meter"); if (m) m.style.width = d.spam_probability + "%"; }, 60);
   });
 }
 
+async function copyResult() {
+  if (!last) return;
+  const { text, d } = last;
+  const top = d.explanation.slice(0, 5).map((e) => `${e.term} (${e.score > 0 ? "+" : ""}${e.score})`).join(", ");
+  const s = `SpamShield: ${d.label.toUpperCase()} | spam probability ${d.spam_probability}% | threshold ${Math.round(d.threshold * 100)}%\nMessage: ${text}\nTop words: ${top || "-"}`;
+  let ok = false;
+  try { await navigator.clipboard.writeText(s); ok = true; }
+  catch (e) {
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = s; document.body.appendChild(ta); ta.select();
+      ok = document.execCommand("copy"); ta.remove();
+    } catch (e2) {}
+  }
+  $("copy-msg").textContent = ok ? "Copied!" : "Copy failed";
+}
+
+async function sendFeedback() {
+  if (!last) return;
+  const btn = $("fb-btn");
+  btn.disabled = true;
+  try {
+    const r = await fetch(`${API}/feedback`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        text: last.text.slice(0, 2000),
+        predicted: last.d.label,
+        correct: last.d.label === "spam" ? "ham" : "spam"
+      })
+    });
+    if (!r.ok) throw new Error(await errText(r));
+    $("fb-msg").textContent = "Thanks, saved!";
+  } catch (e) {
+    $("fb-msg").textContent = "Could not send";
+    btn.disabled = false;
+  }
+}
+
+/* ---------------- History (browser mein, server pe nahi) ---------------- */
+const HKEY = "ss-history";
+function getHistory() {
+  try { const a = JSON.parse(lsGet(HKEY) || "[]"); return Array.isArray(a) ? a : []; }
+  catch (e) { return []; }
+}
+function addHistory(text, d) {
+  let h = getHistory().filter((x) => x.text !== text);
+  h.unshift({ text: text.slice(0, 300), label: d.label, prob: d.spam_probability });
+  h = h.slice(0, 10);
+  lsSet(HKEY, JSON.stringify(h));
+  renderHistory();
+}
+function renderHistory() {
+  const sec = $("history-section");
+  const h = getHistory();
+  if (!h.length) { sec.style.display = "none"; return; }
+  sec.style.display = "";
+  $("history-list").innerHTML = h.map((x, i) => {
+    const cls = x.label === "spam" ? "spam" : "ham";
+    return `<button class="hist-item" type="button" data-i="${i}">
+      <span class="pill ${cls}">${cls.toUpperCase()}</span>
+      <span class="hist-text">${esc(x.text)}</span>
+      <span class="muted">${Number(x.prob) || 0}%</span>
+    </button>`;
+  }).join("");
+  document.querySelectorAll(".hist-item").forEach((b) => {
+    b.addEventListener("click", () => {
+      const x = getHistory()[Number(b.dataset.i)];
+      if (!x) return;
+      $("text").value = x.text;
+      $("count").textContent = x.text.length + " characters";
+      predict();
+      $("analyzer").scrollIntoView({ behavior: "smooth" });
+    });
+  });
+}
+
+/* ---------------- Batch ---------------- */
+const MAXB = 200;
+let lastBatch = null;
+
+function firstField(line) {
+  if (line[0] === '"') {
+    let out = "", i = 1;
+    while (i < line.length) {
+      if (line[i] === '"') { if (line[i + 1] === '"') { out += '"'; i += 2; continue; } break; }
+      out += line[i++];
+    }
+    return out;
+  }
+  const m = line.search(/[,\t]/);
+  return m === -1 ? line : line.slice(0, m);
+}
+const batchLines = () => $("batch-text").value.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+function updateBatchCount() {
+  const n = batchLines().length;
+  $("batch-count").textContent = n + (n === 1 ? " message" : " messages");
+}
+function readBatchFile(file) {
+  const rd = new FileReader();
+  rd.onload = () => {
+    let lines = String(rd.result).split(/\r?\n/).map((l) => l.trim()).filter(Boolean)
+      .map(firstField).map((s) => s.trim()).filter(Boolean);
+    if (lines.length && ["text", "message", "sms", "v2", "review", "content"].includes(lines[0].toLowerCase())) lines.shift();
+    let note = "";
+    if (lines.length > MAXB) { note = `File mein ${lines.length} messages the, sirf pehle ${MAXB} use hue.`; lines = lines.slice(0, MAXB); }
+    $("batch-text").value = lines.join("\n");
+    updateBatchCount();
+    $("batch-result").innerHTML = note ? `<div class="notice">${esc(note)}</div>` : "";
+  };
+  rd.readAsText(file);
+}
+
+async function runBatch() {
+  const out = $("batch-result");
+  let lines = batchLines();
+  if (!lines.length) { out.innerHTML = `<div class="notice error">Pehle kuch messages likho ya file upload karo.</div>`; return; }
+  let note = "";
+  if (lines.length > MAXB) { note = `Sirf pehle ${MAXB} messages check hue.`; lines = lines.slice(0, MAXB); }
+
+  const btn = $("batch-btn");
+  btn.disabled = true; btn.textContent = "Checking...";
+  out.innerHTML = `<div class="notice"><span class="spinner"></span>${lines.length} messages check ho rahe hain...</div>`;
+  try {
+    const r = await fetch(`${API}/predict-batch`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ texts: lines, threshold: threshold() })
+    });
+    if (!r.ok) throw new Error(await errText(r));
+    lastBatch = await r.json();
+    renderBatch(lastBatch, note);
+  } catch (e) {
+    const msg = e.message && e.message.indexOf("Rate limit") === 0
+      ? e.message : "Batch check fail hua. Backend chal raha hai?";
+    out.innerHTML = `<div class="notice error">${esc(msg)}</div>`;
+  } finally {
+    btn.disabled = false; btn.textContent = "Check all";
+  }
+}
+
+function renderBatch(d, note) {
+  const rows = d.results.map((r, i) => {
+    const cls = r.label === "spam" ? "spam" : "ham";
+    const short = r.text.length > 90 ? r.text.slice(0, 90) + "..." : r.text;
+    return `<tr>
+      <td>${i + 1}</td>
+      <td class="msg-cell" title="${esc(r.text)}">${esc(short)}</td>
+      <td><span class="pill ${cls}">${cls.toUpperCase()}</span></td>
+      <td>${r.spam_probability}%</td>
+    </tr>`;
+  }).join("");
+
+  $("batch-result").innerHTML = `
+    ${note ? `<div class="notice">${esc(note)}</div>` : ""}
+    <div class="stat-grid batch-stats">
+      <div class="stat"><b>${d.count}</b><span>Checked</span></div>
+      <div class="stat"><b class="t-spam">${d.spam}</b><span>Spam</span></div>
+      <div class="stat"><b class="t-ham">${d.ham}</b><span>Ham</span></div>
+      <div class="stat"><b>${Math.round(d.threshold * 100)}%</b><span>Threshold</span></div>
+    </div>
+    <div class="table-wrap">
+      <table class="batch-table">
+        <tr><th>#</th><th style="text-align:left">Message</th><th>Verdict</th><th>Spam %</th></tr>
+        ${rows}
+      </table>
+    </div>
+    <button id="batch-dl" class="btn-ghost" type="button">⬇ Download results (CSV)</button>`;
+  $("batch-dl").addEventListener("click", downloadBatch);
+}
+
+function csvCell(s) {
+  s = String(s);
+  if (/^[=+\-@]/.test(s)) s = "'" + s;      // spreadsheet formula injection se bachao
+  return '"' + s.replace(/"/g, '""') + '"';
+}
+function downloadBatch() {
+  if (!lastBatch) return;
+  const rows = ["text,label,spam_probability"].concat(
+    lastBatch.results.map((r) => [csvCell(r.text), r.label, r.spam_probability].join(",")));
+  const blob = new Blob([rows.join("\n")], { type: "text/csv" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "spamshield-batch.csv";
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+/* ---------------- Top words ---------------- */
 async function loadTopWords() {
   const box = $("topwords");
   try {
@@ -134,6 +366,17 @@ function initAnalyzer() {
     });
   });
   ta.addEventListener("keydown", (e) => { if (e.ctrlKey && e.key === "Enter") predict(); });
+
+  $("hist-clear").addEventListener("click", () => { lsSet(HKEY, "[]"); renderHistory(); });
+  renderHistory();
+
+  $("batch-text").addEventListener("input", updateBatchCount);
+  $("batch-file").addEventListener("change", (e) => { if (e.target.files[0]) readBatchFile(e.target.files[0]); e.target.value = ""; });
+  $("batch-btn").addEventListener("click", runBatch);
+  $("batch-clear").addEventListener("click", () => {
+    $("batch-text").value = ""; updateBatchCount(); $("batch-result").innerHTML = ""; lastBatch = null;
+  });
+
   loadTopWords();
 }
 
@@ -147,10 +390,10 @@ function rocChart(d) {
   const ticks = [0, 0.25, 0.5, 0.75, 1];
 
   const grid = ticks.map((t) => `
-    <line x1="${x(0)}" y1="${y(t)}" x2="${x(1)}" y2="${y(t)}" stroke="rgba(255,255,255,0.08)"/>
-    <line x1="${x(t)}" y1="${y(0)}" x2="${x(t)}" y2="${y(1)}" stroke="rgba(255,255,255,0.08)"/>
-    <text x="${m.l - 8}" y="${y(t) + 4}" text-anchor="end" font-size="11" fill="#8b90a8">${t}</text>
-    <text x="${x(t)}" y="${y(0) + 18}" text-anchor="middle" font-size="11" fill="#8b90a8">${t}</text>`).join("");
+    <line x1="${x(0)}" y1="${y(t)}" x2="${x(1)}" y2="${y(t)}" stroke="currentColor" stroke-opacity="0.12"/>
+    <line x1="${x(t)}" y1="${y(0)}" x2="${x(t)}" y2="${y(1)}" stroke="currentColor" stroke-opacity="0.12"/>
+    <text x="${m.l - 8}" y="${y(t) + 4}" text-anchor="end" font-size="11" fill="currentColor" fill-opacity="0.6">${t}</text>
+    <text x="${x(t)}" y="${y(0) + 18}" text-anchor="middle" font-size="11" fill="currentColor" fill-opacity="0.6">${t}</text>`).join("");
 
   const names = Object.keys(d.roc);
   const paths = names.map((n, i) => {
@@ -164,10 +407,10 @@ function rocChart(d) {
   return `
     <svg viewBox="0 0 ${W} ${H}" class="roc-svg" role="img" aria-label="ROC curves">
       ${grid}
-      <line x1="${x(0)}" y1="${y(0)}" x2="${x(1)}" y2="${y(1)}" stroke="#8b90a8" stroke-dasharray="5 5"/>
+      <line x1="${x(0)}" y1="${y(0)}" x2="${x(1)}" y2="${y(1)}" stroke="currentColor" stroke-opacity="0.5" stroke-dasharray="5 5"/>
       ${paths}
-      <text x="${m.l + pw / 2}" y="${H - 6}" text-anchor="middle" font-size="12" fill="#8b90a8">False Positive Rate</text>
-      <text x="14" y="${m.t + ph / 2}" text-anchor="middle" font-size="12" fill="#8b90a8" transform="rotate(-90 14 ${m.t + ph / 2})">True Positive Rate</text>
+      <text x="${m.l + pw / 2}" y="${H - 6}" text-anchor="middle" font-size="12" fill="currentColor" fill-opacity="0.6">False Positive Rate</text>
+      <text x="14" y="${m.t + ph / 2}" text-anchor="middle" font-size="12" fill="currentColor" fill-opacity="0.6" transform="rotate(-90 14 ${m.t + ph / 2})">True Positive Rate</text>
     </svg>
     <div class="legend">${legend}</div>`;
 }
@@ -242,5 +485,7 @@ async function loadMetrics() {
   }
 }
 
+/* ---------------- Start ---------------- */
+initTheme();
 if ($("check-btn")) initAnalyzer();
 if ($("metrics")) loadMetrics();
