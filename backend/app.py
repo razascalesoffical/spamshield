@@ -1,4 +1,4 @@
-import os, json, time, joblib
+import os, re, json, time, joblib
 from collections import defaultdict, deque
 from typing import List, Optional
 
@@ -19,6 +19,17 @@ vec = joblib.load("model/vectorizer.pkl")
 with open("model/metrics.json") as f:
     metrics = json.load(f)
 
+# ---------- Baaqi models (compare feature). Na milen to feature band, app chalti rahe ----------
+EXTRA = {}
+for name, slug in [("Naive Bayes", "naive_bayes"), ("Logistic Regression", "logistic_regression"),
+                   ("Linear SVM", "linear_svm"), ("Random Forest", "random_forest")]:
+    p = os.path.join("model", "extra", slug + ".pkl")
+    if os.path.exists(p):
+        try:
+            EXTRA[name] = joblib.load(p)
+        except Exception:
+            pass
+
 # ---------- Explainability weights ----------
 terms = np.array(vec.get_feature_names_out())
 if hasattr(model, "coef_"):
@@ -30,10 +41,28 @@ order = np.argsort(W)
 TOP_SPAM = [{"term": str(terms[i]), "weight": round(float(W[i]), 3)} for i in order[-15:][::-1]]
 TOP_HAM = [{"term": str(terms[i]), "weight": round(float(W[i]), 3)} for i in order[:15]]
 
+# ---------- Signals: message ke wo hisse jo preprocessing hata deti hai ----------
+CAPS_SKIP = {"OK", "TV", "PC", "UK", "US", "SMS", "ID", "DVD", "CD", "AM", "PM", "OMG", "LOL"}
+
+def signals(text: str):
+    nums = re.findall(r"\d[\d\s\-]{3,}\d|\d{5,}", text)
+    nums = [re.sub(r"\s+", "", n) for n in nums]
+    nums = [n for n in nums if sum(c.isdigit() for c in n) >= 5]
+    urls = re.findall(r"(?:https?://\S+|www\.\S+|\b[\w-]+\.(?:com|net|org|co|uk|info|biz|pk)\b\S*)", text, flags=re.I)
+    caps = [w for w in re.findall(r"\b[A-Z]{3,}\b", text) if w not in CAPS_SKIP]
+    money = re.findall(r"[£$€]\s?\d[\d,\.]*|\b\d[\d,\.]*\s?(?:rs|pkr|usd|gbp|dollars?|pounds?)\b", text, flags=re.I)
+    excl = text.count("!")
+    return {
+        "numbers": {"count": len(nums), "examples": nums[:3]},
+        "urls": {"count": len(urls), "examples": urls[:3]},
+        "caps": {"count": len(caps), "examples": caps[:5]},
+        "money": {"count": len(money), "examples": money[:3]},
+        "exclamations": excl,
+    }
+
 # ---------- API key + rate limiting (demo level) ----------
-# Ye demo hai: key public hai (README mein likhi hai). Asli security nahi, sirf dikhane ke liye.
 DEMO_KEYS = {"demo-key-123"}
-_hits = defaultdict(deque)          # memory mein; server restart pe reset
+_hits = defaultdict(deque)
 
 def limiter(name: str, anon_per_min: int, keyed_per_min: int):
     def dep(request: Request, x_api_key: Optional[str] = Header(default=None)):
@@ -46,7 +75,7 @@ def limiter(name: str, anon_per_min: int, keyed_per_min: int):
         ident = f"{name}:{x_api_key or ip}"
         now = time.time()
         q = _hits[ident]
-        while q and now - q[0] > 60:     # 60 second se purani requests hatao
+        while q and now - q[0] > 60:
             q.popleft()
         if len(q) >= limit:
             raise HTTPException(status_code=429,
@@ -88,12 +117,35 @@ def predict(msg: Msg):
                for j, v in zip(row.col, row.data)]
     contrib.sort(key=lambda c: abs(c["score"]), reverse=True)
 
+    # Out-of-vocabulary: kitne words model ki vocabulary mein hain
+    vocab = vec.vocabulary_
+    uniq = list(dict.fromkeys(s["stemmed"]))
+    known = [w for w in uniq if w in vocab]
+    unknown = [w for w in uniq if w not in vocab]
+    ratio = (len(known) / len(uniq)) if uniq else 0.0
+
+    # Compare: har model ka verdict isi message par (selected threshold ke sath)
+    compare = []
+    for name, m in EXTRA.items():
+        try:
+            p = float(m.predict_proba(X)[0][1])
+        except Exception:
+            continue
+        compare.append({"model": name,
+                        "label": "spam" if p >= msg.threshold else "ham",
+                        "spam_probability": round(p * 100, 2),
+                        "deployed": name == metrics.get("best_model")})
+
     return {"label": label,
             "threshold": msg.threshold,
             "confidence": round((p_spam if label == "spam" else 1 - p_spam) * 100, 2),
             "spam_probability": round(p_spam * 100, 2),
             "steps": s,
-            "explanation": contrib[:10]}
+            "explanation": contrib[:10],
+            "signals": signals(msg.text),
+            "vocab": {"known": len(known), "total": len(uniq),
+                      "known_ratio": round(ratio * 100, 1), "unknown": unknown[:10]},
+            "compare": compare}
 
 @app.post("/predict-batch", dependencies=[Depends(limiter("batch", 10, 60))])
 def predict_batch(b: Batch):
@@ -111,8 +163,6 @@ def predict_batch(b: Batch):
     return {"count": len(results), "spam": n_spam, "ham": len(results) - n_spam,
             "threshold": b.threshold, "results": results}
 
-# Feedback: sirf tab save hota hai jab user khud button dabaye.
-# NOTE: Render free tier pe file redeploy/restart par mit jati hai (demo ke liye theek hai).
 FEEDBACK_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "feedback")
 FEEDBACK_FILE = os.path.join(FEEDBACK_DIR, "feedback.jsonl")
 
@@ -135,7 +185,6 @@ def get_metrics():
 def top_words():
     return {"spam": TOP_SPAM, "ham": TOP_HAM}
 
-# Frontend isi server se serve hoga. Ye hamesha SAB routes ke baad aaye.
 FRONTEND = os.path.join(os.path.dirname(__file__), "..", "frontend")
 if os.path.isdir(FRONTEND):
     app.mount("/", StaticFiles(directory=FRONTEND, html=True), name="frontend")

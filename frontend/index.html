@@ -72,10 +72,16 @@
         <button class="chip" data-text="Hey, are we still meeting at the library after class tomorrow?">Normal chat</button>
       </div>
 
+      <details class="examples" id="examples">
+        <summary>📚 Example library (click to open)</summary>
+        <div id="examples-body"></div>
+      </details>
+
       <div class="thresh">
         <label for="thr">Spam strictness: <b id="thr-val">50%</b></label>
         <input type="range" id="thr" min="10" max="90" step="5" value="50">
         <div class="thr-hint"><span>Lenient (catch more spam, more false alarms)</span><span>Strict (fewer false alarms, may miss spam)</span></div>
+        <div class="thr-stats" id="thr-stats"></div>
       </div>
 
       <div class="actions">

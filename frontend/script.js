@@ -29,6 +29,73 @@ function initTheme() {
   });
 }
 
+/* ---------------- Example library ---------------- */
+const EXAMPLES = [
+  { group: "Prize and lottery scams", items: [
+    ["WINNER!! You have won a free prize. Call 0900 now to claim your cash reward!", "spam"],
+    ["Congratulations! You have been selected for a free holiday. Text WIN to 80082 now", "spam"],
+    ["FREE entry in our weekly draw! Reply YES to 87121 to receive your 500 voucher", "spam"] ] },
+  { group: "Phishing and fake alerts", items: [
+    ["URGENT! Your bank account has been suspended. Verify now at www.secure-bank-login.com", "spam"],
+    ["Your parcel could not be delivered. Pay the 1.99 fee at www.track-parcel.com to reschedule", "spam"] ] },
+  { group: "Loans and job offers", items: [
+    ["Need cash today? Get a loan of up to 5000 in 10 minutes. Reply LOAN to apply", "spam"],
+    ["Work from home and earn 3000 per week. No experience needed. Text JOB to 88600", "spam"] ] },
+  { group: "Normal messages", items: [
+    ["Hey, are we still meeting at the library after class tomorrow?", "ham"],
+    ["Ok I will call you when I reach home. Don't wait for me", "ham"],
+    ["Can you send me the notes from today's lecture? I missed the first part", "ham"] ] },
+  { group: "Tricky (real messages that use spammy words)", items: [
+    ["I won the match today! Call me when you are free, I will tell you everything", "ham"],
+    ["Your appointment is confirmed for 5 pm tomorrow. Please bring your ID card", "ham"],
+    ["Congratulations, you are selected for an interview", "tricky"] ] },
+  { group: "Roman Urdu (outside the training data)", items: [
+    ["aap ne inam jeeta hai abhi call karo", "limit"],
+    ["kal class kitne baje hai", "limit"] ] }
+];
+
+function renderExamples() {
+  const lbl = { spam: "expected: spam", ham: "expected: ham", tricky: "borderline", limit: "limitation demo" };
+  $("examples-body").innerHTML = EXAMPLES.map((g) => `
+    <div class="ex-group"><h4>${esc(g.group)}</h4>
+      ${g.items.map(([t, k]) => `
+        <button type="button" class="ex-item" data-text="${esc(t)}">
+          <span class="ex-text">${esc(t)}</span>
+          <span class="ex-tag ex-${k}">${lbl[k]}</span>
+        </button>`).join("")}
+    </div>`).join("");
+  document.querySelectorAll(".ex-item").forEach((b) => {
+    b.addEventListener("click", () => {
+      $("text").value = b.dataset.text;
+      $("count").textContent = b.dataset.text.length + " characters";
+      predict();
+      $("result").scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  });
+}
+
+/* ---------------- Live precision/recall for the slider ---------------- */
+let CURVE = null;
+async function loadCurve() {
+  try {
+    const r = await fetch(`${API}/metrics`);
+    if (!r.ok) return;
+    const d = await r.json();
+    CURVE = d.threshold_curve || null;
+    updateThrStats();
+  } catch (e) {}
+}
+function updateThrStats() {
+  const box = $("thr-stats");
+  if (!box) return;
+  if (!CURVE) { box.innerHTML = ""; return; }
+  const t = parseInt($("thr").value, 10) / 100;
+  const p = CURVE.find((c) => Math.abs(c.threshold - t) < 0.001);
+  if (!p) { box.innerHTML = ""; return; }
+  box.innerHTML = `On the test set at <b>${Math.round(t * 100)}%</b>: precision <b>${(p.precision * 100).toFixed(1)}%</b>,
+    recall <b>${(p.recall * 100).toFixed(1)}%</b>, false alarms <b>${p.fp}</b>, missed spam <b>${p.fn}</b>`;
+}
+
 /* ---------------- Analyzer ---------------- */
 let last = null;
 const threshold = () => parseInt($("thr").value, 10) / 100;
@@ -94,6 +161,51 @@ function contribBars(items) {
   }).join("");
 }
 
+function vocabHtml(v) {
+  if (!v) return "";
+  if (v.total === 0) {
+    return `<div class="warn">⚠️ <b>No known words.</b> Every word was dropped or is new to the model, so this result is just the default guess and should not be trusted.</div>`;
+  }
+  if (v.known_ratio < 60) {
+    const unk = v.unknown.length ? ` Words it has never seen: <b>${v.unknown.map(esc).join(", ")}</b>.` : "";
+    return `<div class="warn">⚠️ <b>Low trust:</b> the model knows only ${v.known} of ${v.total} words (${v.known_ratio}%) in this message.${unk}
+      This often happens with other languages such as Roman Urdu, because the model was trained on English SMS only.</div>`;
+  }
+  return `<div class="vocab-ok muted">Vocabulary coverage: ${v.known} of ${v.total} words known (${v.known_ratio}%).</div>`;
+}
+
+function signalsHtml(sg) {
+  if (!sg) return "";
+  const items = [];
+  if (sg.numbers.count) items.push(["🔢", `Long number: ${sg.numbers.examples.join(", ")}`]);
+  if (sg.urls.count) items.push(["🔗", `Link: ${sg.urls.examples.join(", ")}`]);
+  if (sg.money.count) items.push(["💰", `Money amount: ${sg.money.examples.join(", ")}`]);
+  if (sg.caps.count) items.push(["🔠", `ALL-CAPS: ${sg.caps.examples.join(", ")}`]);
+  if (sg.exclamations >= 2) items.push(["❗", `${sg.exclamations} exclamation marks`]);
+  const chips = items.length
+    ? items.map(([i, t]) => `<span class="sig">${i} ${esc(t)}</span>`).join("")
+    : `<span class="muted">No spam-style signals found.</span>`;
+  return `<div class="step-card"><h4>Detected signals <span class="muted">(shown for information; the model itself ignores digits and symbols)</span></h4>
+    <div class="sigs">${chips}</div></div>`;
+}
+
+function compareHtml(list) {
+  if (!list || !list.length) return "";
+  const spam = list.filter((c) => c.label === "spam").length;
+  const ham = list.length - spam;
+  const summary = (spam === list.length || ham === list.length)
+    ? `All ${list.length} models agree: <b>${spam ? "SPAM" : "HAM"}</b>.`
+    : `Models disagree: <b>${spam} say spam</b>, <b>${ham} say ham</b>. This is a borderline message.`;
+  const cards = list.map((c) => `
+    <div class="cmp-card ${c.label}">
+      <div class="cmp-name">${esc(c.model)}${c.deployed ? ' <span class="tag">deployed</span>' : ""}</div>
+      <div><span class="pill ${c.label}">${c.label.toUpperCase()}</span></div>
+      <div class="muted">${c.spam_probability}% spam</div>
+    </div>`).join("");
+  return `<div class="step-card"><h4>What do the other models say?</h4>
+    <div class="cmp-grid">${cards}</div><p class="muted cmp-sum">${summary}</p></div>`;
+}
+
 function render(text, d) {
   const isSpam = d.label === "spam";
   const kept = new Set(d.steps.no_stopwords);
@@ -112,6 +224,8 @@ function render(text, d) {
       <div class="meter-label"><span>Spam probability (threshold ${Math.round(d.threshold * 100)}%)</span><span>${d.spam_probability}%</span></div>
     </div>
 
+    ${vocabHtml(d.vocab)}
+
     <div class="result-actions">
       <button class="btn-ghost btn-small" id="copy-btn" type="button">📋 Copy result</button>
       <span class="muted" id="copy-msg"></span>
@@ -126,6 +240,10 @@ function render(text, d) {
       <div class="msg-box">${highlight(text, d)}</div>
       <div class="contrib">${contribBars(d.explanation)}</div>
     </div>
+
+    ${signalsHtml(d.signals)}
+    ${compareHtml(d.compare)}
+
     <div class="steps">
       <div class="step-card"><h4>1. Tokenization</h4><div class="tokens">${tokensHtml || "<span class='muted'>No words found</span>"}</div></div>
       <div class="step-card"><h4>2. Stopword removal (struck-through = removed)</h4><div class="tokens">${stopHtml || "-"}</div></div>
@@ -178,7 +296,7 @@ async function sendFeedback() {
   }
 }
 
-/* ---------------- History (browser mein, server pe nahi) ---------------- */
+/* ---------------- History ---------------- */
 const HKEY = "ss-history";
 function getHistory() {
   try { const a = JSON.parse(lsGet(HKEY) || "[]"); return Array.isArray(a) ? a : []; }
@@ -312,7 +430,7 @@ function renderBatch(d, note) {
 
 function csvCell(s) {
   s = String(s);
-  if (/^[=+\-@]/.test(s)) s = "'" + s;      // spreadsheet formula injection se bachao
+  if (/^[=+\-@]/.test(s)) s = "'" + s;
   return '"' + s.replace(/"/g, '""') + '"';
 }
 function downloadBatch() {
@@ -353,7 +471,7 @@ function initAnalyzer() {
   const ta = $("text");
   ta.addEventListener("input", () => { $("count").textContent = ta.value.length + " characters"; });
   $("check-btn").addEventListener("click", predict);
-  $("thr").addEventListener("input", () => { $("thr-val").textContent = $("thr").value + "%"; });
+  $("thr").addEventListener("input", () => { $("thr-val").textContent = $("thr").value + "%"; updateThrStats(); });
   $("thr").addEventListener("change", () => { if ($("text").value.trim()) predict(); });
   $("clear-btn").addEventListener("click", () => {
     ta.value = ""; $("count").textContent = "0 characters"; $("result").innerHTML = ""; ta.focus();
@@ -377,6 +495,8 @@ function initAnalyzer() {
     $("batch-text").value = ""; updateBatchCount(); $("batch-result").innerHTML = ""; lastBatch = null;
   });
 
+  renderExamples();
+  loadCurve();
   loadTopWords();
 }
 
@@ -415,6 +535,36 @@ function rocChart(d) {
     <div class="legend">${legend}</div>`;
 }
 
+function thrChart(curve) {
+  const W = 440, H = 340, m = { l: 46, r: 14, t: 14, b: 44 };
+  const pw = W - m.l - m.r, ph = H - m.t - m.b;
+  const t0 = curve[0].threshold, t1 = curve[curve.length - 1].threshold;
+  const x = (t) => m.l + ((t - t0) / (t1 - t0)) * pw, y = (v) => m.t + (1 - v) * ph;
+  const yt = [0, 0.25, 0.5, 0.75, 1];
+  const xt = curve.filter((_, i) => i % 3 === 0);
+
+  const grid = yt.map((t) => `
+    <line x1="${m.l}" y1="${y(t)}" x2="${m.l + pw}" y2="${y(t)}" stroke="currentColor" stroke-opacity="0.12"/>
+    <text x="${m.l - 8}" y="${y(t) + 4}" text-anchor="end" font-size="11" fill="currentColor" fill-opacity="0.6">${Math.round(t * 100)}%</text>`).join("")
+    + xt.map((c) => `
+    <text x="${x(c.threshold)}" y="${y(0) + 18}" text-anchor="middle" font-size="11" fill="currentColor" fill-opacity="0.6">${Math.round(c.threshold * 100)}%</text>`).join("");
+
+  const line = (key, color) => `<polyline points="${curve.map((c) => `${x(c.threshold).toFixed(1)},${y(c[key]).toFixed(1)}`).join(" ")}"
+      fill="none" stroke="${color}" stroke-width="2.4" stroke-linejoin="round"/>`;
+
+  return `
+    <svg viewBox="0 0 ${W} ${H}" class="roc-svg" role="img" aria-label="Precision and recall by threshold">
+      ${grid}
+      ${line("precision", "#818cf8")}
+      ${line("recall", "#f59e0b")}
+      <text x="${m.l + pw / 2}" y="${H - 6}" text-anchor="middle" font-size="12" fill="currentColor" fill-opacity="0.6">Decision threshold</text>
+    </svg>
+    <div class="legend">
+      <span class="lg"><i style="background:#818cf8"></i>Precision</span>
+      <span class="lg"><i style="background:#f59e0b"></i>Recall</span>
+    </div>`;
+}
+
 function cmHtml(cm) {
   return `
     <div class="h"></div><div class="h">Predicted Ham</div><div class="h">Predicted Spam</div>
@@ -448,6 +598,13 @@ async function loadMetrics() {
     const options = Object.keys(d.models).map((n) =>
       `<option value="${esc(n)}" ${n === deployed ? "selected" : ""}>${esc(n)}</option>`).join("");
 
+    const thrBlock = d.threshold_curve && d.threshold_curve.length ? `
+      <div class="card-block thr-block">
+        <h3 class="ctr">Threshold trade-off (${esc(deployed)})</h3>
+        <p class="muted ctr">Raising the threshold makes the filter stricter: precision goes up, recall goes down. This is what the strictness slider changes.</p>
+        ${thrChart(d.threshold_curve)}
+      </div>` : "";
+
     box.innerHTML = `
       <div class="stat-grid">
         <div class="stat"><b>${esc(deployed)}</b><span>Deployed model</span></div>
@@ -475,7 +632,8 @@ async function loadMetrics() {
           <div class="ctr"><select id="cm-select">${options}</select></div>
           <div class="cm" id="cm">${cmHtml(dm.confusion_matrix)}</div>
         </div>
-      </div>`;
+      </div>
+      ${thrBlock}`;
 
     $("cm-select").addEventListener("change", (e) => {
       $("cm").innerHTML = cmHtml(d.models[e.target.value].confusion_matrix);

@@ -376,3 +376,49 @@ td.best { color: var(--ham-text); font-weight: 700; }
   .spacer { display: none; }
   .crow { grid-template-columns: 70px 1fr 50px; }
 }
+/* ---- Stage 3 additions ---- */
+.thr-stats { margin-top: 8px; font-size: 13px; color: var(--muted); }
+.thr-stats b { color: var(--text); }
+
+.examples { margin: 4px 0 16px; border: 1px solid var(--border); border-radius: 12px; background: var(--input-bg); }
+.examples summary { cursor: pointer; padding: 10px 14px; font-size: 14px; color: var(--muted); }
+.examples[open] summary { border-bottom: 1px solid var(--border); color: var(--text); }
+#examples-body { padding: 8px 14px 14px; max-height: 360px; overflow-y: auto; }
+.ex-group h4 { margin: 14px 0 6px; font-size: 13px; color: var(--accent-text); }
+.ex-item {
+  display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; cursor: pointer;
+  padding: 8px 12px; margin-bottom: 6px; border-radius: 10px; font: inherit; font-size: 13px;
+  color: var(--text); background: var(--panel); border: 1px solid var(--border); transition: border-color 0.2s;
+}
+.ex-item:hover { border-color: var(--primary); }
+.ex-text { flex: 1; }
+.ex-tag { font-size: 11px; padding: 2px 8px; border-radius: 999px; white-space: nowrap; border: 1px solid var(--border); color: var(--muted); }
+.ex-spam { color: var(--spam-text); border-color: rgba(239, 68, 68, 0.4); }
+.ex-ham { color: var(--ham-text); border-color: rgba(34, 197, 94, 0.4); }
+.ex-tricky { color: #f59e0b; border-color: rgba(245, 158, 11, 0.45); }
+.ex-limit { color: var(--accent-text); border-color: rgba(99, 102, 241, 0.45); }
+
+.warn {
+  margin-top: 12px; padding: 14px 16px; border-radius: 14px; font-size: 14px;
+  background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.45);
+  animation: rise 0.4s ease both;
+}
+.vocab-ok { margin-top: 8px; }
+
+.sigs { display: flex; flex-wrap: wrap; gap: 8px; }
+.sig {
+  padding: 5px 12px; border-radius: 999px; font-size: 13px;
+  background: rgba(99, 102, 241, 0.12); border: 1px solid rgba(99, 102, 241, 0.35);
+  word-break: break-all;
+}
+
+.cmp-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.cmp-card {
+  padding: 12px; border-radius: 12px; text-align: center; background: var(--input-bg); border: 1px solid var(--border);
+}
+.cmp-card.spam { border-color: rgba(239, 68, 68, 0.4); }
+.cmp-card.ham { border-color: rgba(34, 197, 94, 0.4); }
+.cmp-name { font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+.cmp-sum { margin: 10px 0 0; }
+
+.thr-block { margin-top: 16px; }
